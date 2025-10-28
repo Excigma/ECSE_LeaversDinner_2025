@@ -8,13 +8,19 @@
 #include "clw_dbgutils.h"
 
 #define STR_BUFFER_LEN 128
+// Number of temperature samples of the "baseline" room temperature to take on startup
 #define BASELINE_SAMPLES 128
+// Offset to add to baseline to account for self-heating after turning on the card
 #define BASELINE_OFFSET -0.1f
+// Number of samples to average for temperature reading
 #define AVERAGE_WINDOW 32
+// ADC reading to brightness coefficient
+#define TEMP_TO_BRIGHTNESS_QUADRATIC_COEFF 0.15f
+// Minimum and maximum brightness levels
 #define MAX_BRIGHTNESS 1.0f
 #define MIN_BRIGHTNESS 0.05f
 
-#define DEBUG_TEMP_PRINT 1
+#define DEBUG_TEMPERATURE_PRINT 1
 
 void init_gpio(void){
     gpio_init_mask(MASK_ALL_COLS|MASK_ALL_ROWS);
@@ -92,7 +98,7 @@ void update_brightness_from_temp(void) {
     float abs_temp_diff = temp_diff;
     if (abs_temp_diff < 0) abs_temp_diff = -abs_temp_diff;
 
-    float brightness_change = abs_temp_diff * abs_temp_diff * 0.15f;
+    float brightness_change = abs_temp_diff * abs_temp_diff * TEMP_TO_BRIGHTNESS_QUADRATIC_COEFF;
     float target_brightness = brightness_change;
 
     // Clamp brightness to 5% to 100% of max brightness
@@ -106,13 +112,13 @@ void update_brightness_from_temp(void) {
     // Smoothly update current brightness - faster decay when decreasing
     if (target_brightness < current_brightness) {
         // Faster response when dimming
-        current_brightness = current_brightness * 0.4f + target_brightness * 0.6f;
+        current_brightness = current_brightness * 0.3f + target_brightness * 0.7f;
     } else {
         // Slower response when brightening
         current_brightness = current_brightness * 0.98f + target_brightness * 0.02f;
     }
-    
-#if DEBUG_TEMP_PRINT
+
+#if DEBUG_TEMPERATURE_PRINT
     if (now - last_debug_print > 1000) {
         printf("ADC: %.1f, Baseline: %.1f, RawDiff: %.1f, AbsDiff: %.1f, Brightness: %.1f%%\n", 
                adc_temp, baseline_adc_temp, temp_diff, abs_temp_diff, current_brightness * 100.0f);
