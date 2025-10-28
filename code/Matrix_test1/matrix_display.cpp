@@ -234,11 +234,29 @@ void scroll_chars(void){
 
 
 
-void disp_char(const uint8_t * character){
+void disp_char(const uint8_t * character, float brightness){
+    if (brightness < 0.0f) brightness = 0.0f;
+    if (brightness > 1.0f) brightness = 1.0f;
+    
+    // Calculate on and off times based on duty cycle
+    uint on_time_us = (uint)(LED_period_us * brightness);
+    uint off_time_us = LED_period_us - on_time_us;
+    
     for(uint8_t i = 0; i < 5; i++){ 
         for(uint8_t j = 0; j < 5; j++){
             if((character[i]>>(4-j))&0x01){
-                set_led(i,j);
+                static const uint rows[] = {LED_R1,LED_R2,LED_R3,LED_R4,LED_R5};
+                static const uint cols[] = {LED_C1,LED_C2,LED_C3,LED_C4,LED_C5};
+                
+                if (on_time_us > 0) {
+                    gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, (1<<cols[j])|(MASK_ALL_ROWS &~(1<<rows[i])));
+                    sleep_us(on_time_us);
+                }
+                
+                if (off_time_us > 0) {
+                    gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, MASK_ALL_ROWS);
+                    sleep_us(off_time_us);
+                }
             } 
         }
     }
