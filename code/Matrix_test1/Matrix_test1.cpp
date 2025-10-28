@@ -1,14 +1,15 @@
 #include <stdio.h>
 #include "pico/stdlib.h"
 #include <string.h>
+#include "hardware/adc.h"
 #include "matrix_display.hpp"
 #include "pindefs.hpp"
 #include "pico_flash.hpp"
 #include "clw_dbgutils.h"
 #define STR_BUFFER_LEN 128
-
-
-
+#define BASELINE_SAMPLES 20
+#define AVERAGE_WINDOW 8
+#define DEBUG_TEMP_PRINT 0
 
 void init_gpio(void){
     gpio_init_mask(MASK_ALL_COLS|MASK_ALL_ROWS);
@@ -23,11 +24,102 @@ void init_gpio(void){
     gpio_set_dir(PB2,0);
     gpio_pull_up(PB1);
     gpio_pull_up(PB2);
+    
+    adc_init();
+    adc_set_temp_sensor_enabled(true);
+    adc_select_input(4);
 }
 
 uint counter = 0;
 uint scroll_count = 0;
 const uint8_t * current_char;
+
+float max_brightness = 1.0f;
+float current_brightness = 0.05f;
+float baseline_adc_temp = 0;
+
+// Function to read temperature and update brightness
+void update_brightness_from_temp(void) {
+    static uint32_t last_update = 0;
+    static uint32_t last_debug_print = 0;
+    static uint32_t last_baseline_update = 0;
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    
+    // Update only every 50ms
+    if (now - last_update < 50) {
+        return;
+    }
+    last_update = now;
+    
+    uint16_t raw_adc_temp = adc_read();
+
+    static float adc_history[AVERAGE_WINDOW] = {0};
+    static uint8_t adc_index = 0;
+    static bool history_filled = false;
+
+    // Add to averaging window of AVERAGE_WINDOW samples
+    adc_history[adc_index] = raw_adc_temp;
+    adc_index = (adc_index + 1) % AVERAGE_WINDOW;
+    if (adc_index == 0) history_filled = true;
+    
+    // Calculate average temperature
+    float adc_temp = 0;
+    uint8_t samples = history_filled ? AVERAGE_WINDOW : (adc_index == 0 ? AVERAGE_WINDOW : adc_index);
+    for (uint8_t i = 0; i < samples; i++) {
+        adc_temp += adc_history[i];
+    }
+    adc_temp /= samples;
+    
+    static uint8_t baseline_count = 0;
+    static float baseline_sum = 0;
+    
+    // Measure baseline temperature over first 20 readings
+    if (baseline_count < BASELINE_SAMPLES) {
+        baseline_sum += adc_temp;
+        baseline_count++;
+        if (baseline_count == BASELINE_SAMPLES) {
+            baseline_adc_temp = baseline_sum / 20.0f;
+            printf("Baseline ADC temp (averaged): %.1f\n", baseline_adc_temp);
+            last_baseline_update = now;
+        }
+        return;
+    }
+
+    float temp_diff = adc_temp - baseline_adc_temp;
+
+    // Absolute, so heating and cooling have same effect
+    float abs_temp_diff = temp_diff;
+    if (abs_temp_diff < 0) abs_temp_diff = -abs_temp_diff;
+
+    float brightness_change = abs_temp_diff * 0.20f;
+    float target_brightness = (max_brightness * 0.0f) + brightness_change;
+    
+    // Clamp brightness to 5% to 100% of max brightness
+    if (target_brightness > max_brightness) {
+        target_brightness = max_brightness;
+    }
+    if (target_brightness < max_brightness * 0.5f) {
+        target_brightness = max_brightness * 0.05f;
+    }
+    
+    // Smoothly update current brightness - faster decay when decreasing
+    if (target_brightness < current_brightness) {
+        // Faster response when dimming
+        current_brightness = current_brightness * 0.6f + target_brightness * 0.4f;
+    } else {
+        // Slower response when brightening
+        current_brightness = current_brightness * 0.98f + target_brightness * 0.02f;
+    }
+    
+#if DEBUG_TEMP_PRINT
+    if (now - last_debug_print > 1000) {
+        printf("ADC: %.1f, Baseline: %.1f, RawDiff: %.1f, AbsDiff: %.1f, Brightness: %.1f%%\n", 
+               adc_temp, baseline_adc_temp, temp_diff, abs_temp_diff, current_brightness * 100.0f);
+        last_debug_print = now;
+    }
+#endif
+}
+
 //const char * testString = ;
 enum disp_mode{
     USER = 0,
@@ -145,7 +237,8 @@ int main()
             //print_print_buff();
         }
         for(int i = 0; i < 100; i++){
-            disp_char(current_char); 
+            update_brightness_from_temp();
+            disp_char(current_char, current_brightness); 
             //This is janky - ISRs were being weird so we just do 100 display cycles for every button poll
             //which means our polling rate is worst case 100us*25*100 = 250ms.
             //if ISRs still funky maybe throw this on core 1? would be cool and leave core 0 available for user code/polling.
