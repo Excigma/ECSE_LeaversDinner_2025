@@ -48,7 +48,7 @@ pico_set_linker_script(Matrix_test1 ${CMAKE_SOURCE_DIR}/memmap_custom.ld)
 
 # Add the standard library to the build
 target_link_libraries(Matrix_test1
-        pico_stdlib)
+        pico_stdlib hardware_adc)
 
 # Add the standard include files to the build
 target_include_directories(Matrix_test1 PRIVATE
