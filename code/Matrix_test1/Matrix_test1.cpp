@@ -8,8 +8,9 @@
 #include "clw_dbgutils.h"
 
 #define STR_BUFFER_LEN 128
-#define BASELINE_SAMPLES 200
-#define AVERAGE_WINDOW 10
+#define BASELINE_SAMPLES 128
+#define BASELINE_OFFSET -0.1f
+#define AVERAGE_WINDOW 32
 #define MAX_BRIGHTNESS 1.0f
 #define MIN_BRIGHTNESS 0.05f
 
@@ -45,7 +46,6 @@ float baseline_adc_temp = 0;
 void update_brightness_from_temp(void) {
     static uint32_t last_update = 0;
     static uint32_t last_debug_print = 0;
-    static uint32_t last_baseline_update = 0;
     uint32_t now = to_ms_since_boot(get_absolute_time());
     
     // Update only every 50ms
@@ -80,10 +80,9 @@ void update_brightness_from_temp(void) {
     if (baseline_count < BASELINE_SAMPLES) {
         baseline_sum += adc_temp;
         baseline_count++;
-        baseline_adc_temp = baseline_sum / baseline_count;
+        baseline_adc_temp = BASELINE_OFFSET + (baseline_sum / baseline_count);
         if (baseline_count == BASELINE_SAMPLES) {
             printf("Baseline ADC temp (averaged): %.1f\n", baseline_adc_temp);
-            last_baseline_update = now;
         }
     }
 
@@ -93,8 +92,8 @@ void update_brightness_from_temp(void) {
     float abs_temp_diff = temp_diff;
     if (abs_temp_diff < 0) abs_temp_diff = -abs_temp_diff;
 
-    float brightness_change = abs_temp_diff * 0.25f;
-    float target_brightness = MIN_BRIGHTNESS + brightness_change;
+    float brightness_change = abs_temp_diff * abs_temp_diff * 0.15f;
+    float target_brightness = brightness_change;
 
     // Clamp brightness to 5% to 100% of max brightness
     if (target_brightness > MAX_BRIGHTNESS) {
@@ -107,7 +106,7 @@ void update_brightness_from_temp(void) {
     // Smoothly update current brightness - faster decay when decreasing
     if (target_brightness < current_brightness) {
         // Faster response when dimming
-        current_brightness = current_brightness * 0.6f + target_brightness * 0.4f;
+        current_brightness = current_brightness * 0.4f + target_brightness * 0.6f;
     } else {
         // Slower response when brightening
         current_brightness = current_brightness * 0.98f + target_brightness * 0.02f;
