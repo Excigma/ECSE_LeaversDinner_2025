@@ -6,9 +6,13 @@
 #include "pindefs.hpp"
 #include "pico_flash.hpp"
 #include "clw_dbgutils.h"
+
 #define STR_BUFFER_LEN 128
 #define BASELINE_SAMPLES 200
 #define AVERAGE_WINDOW 10
+#define MAX_BRIGHTNESS 1.0f
+#define MIN_BRIGHTNESS 0.05f
+
 #define DEBUG_TEMP_PRINT 1
 
 void init_gpio(void){
@@ -34,7 +38,6 @@ uint counter = 0;
 uint scroll_count = 0;
 const uint8_t * current_char;
 
-float max_brightness = 1.0f;
 float current_brightness = 0.05f;
 float baseline_adc_temp = 0;
 
@@ -91,14 +94,14 @@ void update_brightness_from_temp(void) {
     if (abs_temp_diff < 0) abs_temp_diff = -abs_temp_diff;
 
     float brightness_change = abs_temp_diff * 0.25f;
-    float target_brightness = (max_brightness * 0.15f) + brightness_change;
-    
+    float target_brightness = MIN_BRIGHTNESS + brightness_change;
+
     // Clamp brightness to 5% to 100% of max brightness
-    if (target_brightness > max_brightness) {
-        target_brightness = max_brightness;
+    if (target_brightness > MAX_BRIGHTNESS) {
+        target_brightness = MAX_BRIGHTNESS;
     }
-    if (target_brightness < max_brightness * 0.15f) {
-        target_brightness = max_brightness * 0.15f;
+    if (target_brightness < MIN_BRIGHTNESS) {
+        target_brightness = MIN_BRIGHTNESS;
     }
     
     // Smoothly update current brightness - faster decay when decreasing
