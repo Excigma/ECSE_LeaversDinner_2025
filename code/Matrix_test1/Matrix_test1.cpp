@@ -7,9 +7,9 @@
 #include "pico_flash.hpp"
 #include "clw_dbgutils.h"
 #define STR_BUFFER_LEN 128
-#define BASELINE_SAMPLES 20
-#define AVERAGE_WINDOW 8
-#define DEBUG_TEMP_PRINT 0
+#define BASELINE_SAMPLES 200
+#define AVERAGE_WINDOW 10
+#define DEBUG_TEMP_PRINT 1
 
 void init_gpio(void){
     gpio_init_mask(MASK_ALL_COLS|MASK_ALL_ROWS);
@@ -77,12 +77,11 @@ void update_brightness_from_temp(void) {
     if (baseline_count < BASELINE_SAMPLES) {
         baseline_sum += adc_temp;
         baseline_count++;
+        baseline_adc_temp = baseline_sum / baseline_count;
         if (baseline_count == BASELINE_SAMPLES) {
-            baseline_adc_temp = baseline_sum / 20.0f;
             printf("Baseline ADC temp (averaged): %.1f\n", baseline_adc_temp);
             last_baseline_update = now;
         }
-        return;
     }
 
     float temp_diff = adc_temp - baseline_adc_temp;
@@ -91,15 +90,15 @@ void update_brightness_from_temp(void) {
     float abs_temp_diff = temp_diff;
     if (abs_temp_diff < 0) abs_temp_diff = -abs_temp_diff;
 
-    float brightness_change = abs_temp_diff * 0.20f;
-    float target_brightness = (max_brightness * 0.0f) + brightness_change;
+    float brightness_change = abs_temp_diff * 0.25f;
+    float target_brightness = (max_brightness * 0.15f) + brightness_change;
     
     // Clamp brightness to 5% to 100% of max brightness
     if (target_brightness > max_brightness) {
         target_brightness = max_brightness;
     }
-    if (target_brightness < max_brightness * 0.5f) {
-        target_brightness = max_brightness * 0.05f;
+    if (target_brightness < max_brightness * 0.15f) {
+        target_brightness = max_brightness * 0.15f;
     }
     
     // Smoothly update current brightness - faster decay when decreasing
