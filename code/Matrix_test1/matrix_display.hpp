@@ -5,6 +5,7 @@
 extern uint8_t scroll_buff[15];
 const uint8_t* char_to_matrix(const char charIn);
 void disp_char(const uint8_t * character, float brightness);
+void disp_frame(const uint8_t * frame_data, float brightness);
 void scroll_chars(void);
 void add_char_to_scroll(const uint8_t * character);
 void add_char_to_scroll_start(const uint8_t * character);

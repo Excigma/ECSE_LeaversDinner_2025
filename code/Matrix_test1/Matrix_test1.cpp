@@ -5,6 +5,7 @@
 #include "matrix_display.hpp"
 #include "pindefs.hpp"
 #include "pico_flash.hpp"
+#include "frames.h"
 #include "clw_dbgutils.h"
 
 #define STR_BUFFER_LEN 128
@@ -44,6 +45,12 @@ uint scroll_count = 0;
 const uint8_t * current_char;
 
 float current_brightness = 0.55f;
+
+// Video playback state
+bool video_mode = false;
+uint32_t video_start_time = 0;
+#define VIDEO_FPS 30
+#define FRAME_DURATION_MS (1000 / VIDEO_FPS)
 
 // Swipe detection thresholds
 #define TOUCH_THRESHOLD 10      // How much below baseline counts as a touch
@@ -263,13 +270,12 @@ int main()
         bool pb2_val = gpio_get(PB2);
         if((pb1_last != pb1_val)||(pb2_last!=pb2_val)){
             if((pb1_val==0) &&(pb2_val ==0)){
-                display_mode = EASTER;
-                counter = 0;
-                const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
-                add_char_to_scroll_start(disp_char);
-                add_char_to_scroll(disp_char);
-                scroll_count=5-((disp_char[0]&0xE0)>>5); //3MSB of first col of char = length (0-7)
+                // Easter egg: Play video
+                video_mode = true;
+                video_start_time = to_ms_since_boot(get_absolute_time());
+                printf("Easter egg activated! Playing video...\n");
             }else if((pb1_val == 0)){
+                video_mode = false;
                 display_mode = ECSE;
                 counter = 0;
                 const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
@@ -278,6 +284,7 @@ int main()
                 scroll_count=5-((disp_char[0]&0xE0)>>5); //3MSB of first col of char = length (0-7)
                 print_info();
             }else if(pb2_val == 0){
+                video_mode = false;
                 display_mode = USER;
                 counter = 0;
                 const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
@@ -290,21 +297,38 @@ int main()
         }
         pb1_last = pb1_val;
 
-        if(gpio_get(PB2)){
-            current_char=scroll_buff;//char_to_matrix(stringBuffer[counter]);
+        // Video playback mode
+        if (video_mode) {
+            uint32_t now = to_ms_since_boot(get_absolute_time());
+            uint32_t elapsed_ms = now - video_start_time;
+            
+            // Calculate current frame index
+            uint32_t video_frame_index = (elapsed_ms * VIDEO_FPS) / 1000;
+            
+            // Check if video has finished
+            if (video_frame_index >= FRAMES_COUNT) {
+                video_mode = false;
+                video_frame_index = FRAMES_COUNT - 1;
+            }
+            
+            // IDK Campbell had this so I'm just copying it
+            for(int i = 0; i < 10; i++){
+                update_brightness_from_swipe();
+                disp_frame(frames[video_frame_index], current_brightness);
+            }
         }
-        else{
-            //scroll_screen();
-            //current_char = char_to_matrix(128);
-            //print_print_buff();
+        // Normal text display mode
+        else {
+            if(gpio_get(PB2)){
+                current_char=scroll_buff;
+            }
+            
+            for(int i = 0; i < 100; i++){
+                update_brightness_from_swipe();
+                disp_char(current_char, current_brightness); 
+            }
         }
-        for(int i = 0; i < 100; i++){
-            update_brightness_from_swipe();
-            disp_char(current_char, current_brightness); 
-            //This is janky - ISRs were being weird so we just do 100 display cycles for every button poll
-            //which means our polling rate is worst case 100us*25*100 = 250ms.
-            //if ISRs still funky maybe throw this on core 1? would be cool and leave core 0 available for user code/polling.
-        }
+        
         //scroll_screen();
         char inChar = getchar_timeout_us(10);
         if(inChar != 0xFE){

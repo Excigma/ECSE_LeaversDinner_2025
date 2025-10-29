@@ -232,35 +232,56 @@ void scroll_chars(void){
     scroll_buff[13] = 0;
 }
 
-
-
-void disp_char(const uint8_t * character, float brightness){
+static float apply_brightness_scaling(float brightness) {
     if (brightness < 0.0f) brightness = 0.0f;
     if (brightness > 1.0f) brightness = 1.0f;
+    // Cubic scaling for perceptual linearity: 0.5(x+0.25)^3 + 0.02
+    return 0.5f * (brightness + 0.25f) * (brightness + 0.25f) * (brightness + 0.25f) + 0.02f;
+}
 
-    // Cubic scaling for perceptual linearity
-    // 0.5\left(x+0.25\right)^{3}+0.02
-    brightness = 0.5f * (brightness + 0.25f) * (brightness + 0.25f) * (brightness + 0.25f) + 0.02f;
-
-    // Calculate on and off times based on duty cycle
+static void render_pixel(uint8_t row, uint8_t col, float brightness) {
+    static const uint rows[] = {LED_R1, LED_R2, LED_R3, LED_R4, LED_R5};
+    static const uint cols[] = {LED_C1, LED_C2, LED_C3, LED_C4, LED_C5};
+    
     uint on_time_us = (uint)(LED_period_us * brightness);
     uint off_time_us = LED_period_us - on_time_us;
     
-    for(uint8_t i = 0; i < 5; i++){ 
-        for(uint8_t j = 0; j < 5; j++){
-            if((character[i]>>(4-j))&0x01){
-                static const uint rows[] = {LED_R1,LED_R2,LED_R3,LED_R4,LED_R5};
-                static const uint cols[] = {LED_C1,LED_C2,LED_C3,LED_C4,LED_C5};
-                
-                if (on_time_us > 0) {
-                    gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, (1<<cols[j])|(MASK_ALL_ROWS &~(1<<rows[i])));
-                    sleep_us(on_time_us);
-                }
-                
-                if (off_time_us > 0) {
-                    gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, MASK_ALL_ROWS);
-                    sleep_us(off_time_us);
-                }
+    if (on_time_us > 0) {
+        gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, (1<<cols[col])|(MASK_ALL_ROWS &~(1<<rows[row])));
+        sleep_us(on_time_us);
+    }
+    
+    if (off_time_us > 0) {
+        gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, MASK_ALL_ROWS);
+        sleep_us(off_time_us);
+    }
+}
+
+void disp_char(const uint8_t * character, float brightness){
+    brightness = apply_brightness_scaling(brightness);
+    
+    for(uint8_t row = 0; row < 5; row++){ 
+        for(uint8_t col = 0; col < 5; col++){
+            if((character[row]>>(4-col))&0x01){
+                render_pixel(row, col, brightness);
+            } 
+        }
+    }
+    clear_matrix();
+}
+
+// Display a video frame (25 bytes in row order: [row0][row1][row2][row3][row4])
+void disp_frame(const uint8_t * frame_data, float brightness){
+    for(uint8_t row = 0; row < 5; row++){ 
+        for(uint8_t col = 0; col < 5; col++){
+            // index = row * 5 + col
+            // Flip horizontally: use (4 - col) instead of col
+            uint8_t pixel_value = frame_data[row * 5 + (4 - col)];
+            if(pixel_value > 0){
+                // Convert 0-100 to 0.0-1.0, then multiply by set brightness level
+                float pixel_brightness = (pixel_value / 100.0f) * brightness;
+                pixel_brightness = apply_brightness_scaling(pixel_brightness);
+                render_pixel(row, col, pixel_brightness);
             } 
         }
     }
