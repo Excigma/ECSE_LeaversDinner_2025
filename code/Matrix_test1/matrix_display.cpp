@@ -237,7 +237,11 @@ void scroll_chars(void){
 void disp_char(const uint8_t * character, float brightness){
     if (brightness < 0.0f) brightness = 0.0f;
     if (brightness > 1.0f) brightness = 1.0f;
-    
+
+    // Cubic scaling for perceptual linearity
+    // 0.5\left(x+0.25\right)^{3}+0.02
+    brightness = 0.5f * (brightness + 0.25f) * (brightness + 0.25f) * (brightness + 0.25f) + 0.02f;
+
     // Calculate on and off times based on duty cycle
     uint on_time_us = (uint)(LED_period_us * brightness);
     uint off_time_us = LED_period_us - on_time_us;
