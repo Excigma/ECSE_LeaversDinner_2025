@@ -14,10 +14,8 @@
 #define BASELINE_OFFSET -0.1f
 // Number of samples to average for temperature reading
 #define AVERAGE_WINDOW 32
-// ADC reading to brightness coefficient
-#define TEMP_TO_BRIGHTNESS_QUADRATIC_COEFF 0.15f
 // Minimum and maximum brightness levels
-#define MAX_BRIGHTNESS 1.0f
+#define MAX_BRIGHTNESS 0.95f
 #define MIN_BRIGHTNESS 0.05f
 
 #define DEBUG_TEMPERATURE_PRINT 1
@@ -45,83 +43,140 @@ uint counter = 0;
 uint scroll_count = 0;
 const uint8_t * current_char;
 
-float current_brightness = 0.05f;
-float baseline_adc_temp = 0;
+float current_brightness = 0.55f;
 
-// Function to read temperature and update brightness
-void update_brightness_from_temp(void) {
+// Swipe detection thresholds
+#define TOUCH_THRESHOLD 10      // How much below baseline counts as a touch
+#define SWIPE_TIMEOUT_MS 300    // Max time for a complete swipe
+#define BRIGHTNESS_STEP 0.1f   // How much to change brightness per swipe
+
+// Function to detect swipes and update brightness
+void update_brightness_from_swipe(void) {
     static uint32_t last_update = 0;
     static uint32_t last_debug_print = 0;
     uint32_t now = to_ms_since_boot(get_absolute_time());
     
-    // Update only every 50ms
-    if (now - last_update < 50) {
+    // Update every 20ms
+    if (now - last_update < 20) {
         return;
     }
     last_update = now;
     
-    uint16_t raw_adc_temp = adc_read();
-
-    static float adc_history[AVERAGE_WINDOW] = {0};
-    static uint8_t adc_index = 0;
-    static bool history_filled = false;
-
-    // Add to averaging window of AVERAGE_WINDOW samples
-    adc_history[adc_index] = raw_adc_temp;
-    adc_index = (adc_index + 1) % AVERAGE_WINDOW;
-    if (adc_index == 0) history_filled = true;
-    
-    // Calculate average temperature
-    float adc_temp = 0;
-    uint8_t samples = history_filled ? AVERAGE_WINDOW : (adc_index == 0 ? AVERAGE_WINDOW : adc_index);
-    for (uint8_t i = 0; i < samples; i++) {
-        adc_temp += adc_history[i];
+    // Read all ADC channels (0-3 are touch sensors)
+    uint16_t adc_readings[5];
+    for (uint8_t i = 0; i < 5; i++) {
+        adc_select_input(i);
+        adc_readings[i] = adc_read();
     }
-    adc_temp /= samples;
     
-    static uint8_t baseline_count = 0;
-    static float baseline_sum = 0;
+    // Calibrate baselines dynamically (slow moving average)
+    static float baselines[4] = {0};
+    static bool baselines_init = false;
     
-    // Measure baseline temperature over first 20 readings
-    if (baseline_count < BASELINE_SAMPLES) {
-        baseline_sum += adc_temp;
-        baseline_count++;
-        baseline_adc_temp = BASELINE_OFFSET + (baseline_sum / baseline_count);
-        if (baseline_count == BASELINE_SAMPLES) {
-            printf("Baseline ADC temp (averaged): %.1f\n", baseline_adc_temp);
+    if (!baselines_init) {
+        for (uint8_t i = 0; i < 4; i++) {
+            baselines[i] = adc_readings[i];
+        }
+        baselines_init = true;
+    }
+    
+    // Detect touches (drop below baseline)
+    bool touches[4] = {false};
+    
+    for (uint8_t i = 0; i < 4; i++) {
+        touches[i] = (baselines[i] - adc_readings[i]) > TOUCH_THRESHOLD;
+    }
+    
+    // Update baseline when not touching (prevents drift during touch)
+    for (uint8_t i = 0; i < 4; i++) {
+        if (!touches[i]) {
+            baselines[i] = baselines[i] * 0.95f + adc_readings[i] * 0.05f;
         }
     }
-
-    float temp_diff = adc_temp - baseline_adc_temp;
-
-    // Absolute, so heating and cooling have same effect
-    float abs_temp_diff = temp_diff;
-    if (abs_temp_diff < 0) abs_temp_diff = -abs_temp_diff;
-
-    float brightness_change = abs_temp_diff * abs_temp_diff * TEMP_TO_BRIGHTNESS_QUADRATIC_COEFF;
-    float target_brightness = brightness_change;
-
-    // Clamp brightness to 5% to 100% of max brightness
-    if (target_brightness > MAX_BRIGHTNESS) {
-        target_brightness = MAX_BRIGHTNESS;
-    }
-    if (target_brightness < MIN_BRIGHTNESS) {
-        target_brightness = MIN_BRIGHTNESS;
+    
+    // Top to bottom swipe: 0 -> 3 decreases brightness
+    static enum {IDLE, TOUCH_0, TOUCH_1, TOUCH_2, TOUCH_3} swipe_state = IDLE;
+    static uint32_t swipe_start_time = 0;
+    static bool swipe_detected = false;
+    
+    if (now - swipe_start_time > SWIPE_TIMEOUT_MS) {
+        swipe_state = IDLE;
     }
     
-    // Smoothly update current brightness - faster decay when decreasing
-    if (target_brightness < current_brightness) {
-        // Faster response when dimming
-        current_brightness = current_brightness * 0.3f + target_brightness * 0.7f;
-    } else {
-        // Slower response when brightening
-        current_brightness = current_brightness * 0.98f + target_brightness * 0.02f;
+    switch (swipe_state) {
+        case IDLE:
+            if (touches[0]) {
+                swipe_state = TOUCH_0;
+                swipe_start_time = now;
+            }
+            break;
+        case TOUCH_0:
+            if (touches[1]) swipe_state = TOUCH_1;
+            break;
+        case TOUCH_1:
+            if (touches[2]) swipe_state = TOUCH_2;
+            break;
+        case TOUCH_2:
+            if (touches[3]) {
+                current_brightness -= BRIGHTNESS_STEP;
+                if (current_brightness < MIN_BRIGHTNESS) current_brightness = MIN_BRIGHTNESS;
+                swipe_state = TOUCH_3;
+                swipe_detected = true;
+            }
+            break;
+        case TOUCH_3:
+            if (!touches[0] && !touches[1] && !touches[2] && !touches[3]) {
+                swipe_state = IDLE;
+            }
+            break;
+    }
+    
+    // Bottom to top swipe: 3 ->0 increases brightness
+    static enum {R_IDLE, R_TOUCH_3, R_TOUCH_2, R_TOUCH_1, R_TOUCH_0} r_swipe_state = R_IDLE;
+    static uint32_t r_swipe_start_time = 0;
+    
+    if (now - r_swipe_start_time > SWIPE_TIMEOUT_MS) {
+        r_swipe_state = R_IDLE;
+    }
+    
+    switch (r_swipe_state) {
+        case R_IDLE:
+            if (touches[3]) {
+                r_swipe_state = R_TOUCH_3;
+                r_swipe_start_time = now;
+            }
+            break;
+        case R_TOUCH_3:
+            if (touches[2]) r_swipe_state = R_TOUCH_2;
+            break;
+        case R_TOUCH_2:
+            if (touches[1]) r_swipe_state = R_TOUCH_1;
+            break;
+        case R_TOUCH_1:
+            if (touches[0]) {
+                current_brightness += BRIGHTNESS_STEP;
+                if (current_brightness > MAX_BRIGHTNESS) current_brightness = MAX_BRIGHTNESS;
+                r_swipe_state = R_TOUCH_0;
+                swipe_detected = true;
+            }
+            break;
+        case R_TOUCH_0:
+            if (!touches[0] && !touches[1] && !touches[2] && !touches[3]) {
+                r_swipe_state = R_IDLE;
+            }
+            break;
     }
 
 #if DEBUG_TEMPERATURE_PRINT
-    if (now - last_debug_print > 1000) {
-        printf("ADC: %.1f, Baseline: %.1f, RawDiff: %.1f, AbsDiff: %.1f, Brightness: %.1f%%\n", 
-               adc_temp, baseline_adc_temp, temp_diff, abs_temp_diff, current_brightness * 100.0f);
+    if (now - last_debug_print > 200) {
+        printf("ADC: %4d %4d %4d %4d | Base: %4.0f %4.0f %4.0f %4.0f | Touch: %d%d%d%d | Bright: %.1f%%%s\n",
+               adc_readings[0], adc_readings[1], adc_readings[2], adc_readings[3],
+               baselines[0], baselines[1], baselines[2], baselines[3],
+               touches[0], touches[1], touches[2], touches[3],
+               current_brightness * 100.0f,
+               swipe_detected ? " <- SWIPE!" : "");
+        
+        swipe_detected = false;
         last_debug_print = now;
     }
 #endif
@@ -244,7 +299,7 @@ int main()
             //print_print_buff();
         }
         for(int i = 0; i < 100; i++){
-            update_brightness_from_temp();
+            update_brightness_from_swipe();
             disp_char(current_char, current_brightness); 
             //This is janky - ISRs were being weird so we just do 100 display cycles for every button poll
             //which means our polling rate is worst case 100us*25*100 = 250ms.
