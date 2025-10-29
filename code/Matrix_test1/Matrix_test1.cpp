@@ -50,6 +50,17 @@ float current_brightness = 0.55f;
 #define SWIPE_TIMEOUT_MS 300    // Max time for a complete swipe
 #define BRIGHTNESS_STEP 0.1f   // How much to change brightness per swipe
 
+// Swipe animation state
+struct SwipeAnimation {
+    bool active;
+    bool direction_up;
+    int8_t position;    // -3 to 7 (starts off screen, moves across)
+    uint32_t last_update;
+} swipe_anim = {false, false, 0, 0};
+
+#define SWIPE_ANIM_DURATION_MS 400
+#define SWIPE_ANIM_STEPS 10
+
 // Function to detect swipes and update brightness
 void update_brightness_from_swipe(void) {
     static uint32_t last_update = 0;
@@ -122,6 +133,11 @@ void update_brightness_from_swipe(void) {
                 if (current_brightness < MIN_BRIGHTNESS) current_brightness = MIN_BRIGHTNESS;
                 swipe_state = TOUCH_3;
                 swipe_detected = true;
+                // Trigger downward swipe animation
+                swipe_anim.active = true;
+                swipe_anim.direction_up = false;
+                swipe_anim.position = -3;
+                swipe_anim.last_update = now;
             }
             break;
         case TOUCH_3:
@@ -158,6 +174,11 @@ void update_brightness_from_swipe(void) {
                 if (current_brightness > MAX_BRIGHTNESS) current_brightness = MAX_BRIGHTNESS;
                 r_swipe_state = R_TOUCH_0;
                 swipe_detected = true;
+                // Trigger upward swipe animation
+                swipe_anim.active = true;
+                swipe_anim.direction_up = true;
+                swipe_anim.position = -3;
+                swipe_anim.last_update = now;
             }
             break;
         case R_TOUCH_0:
@@ -180,6 +201,73 @@ void update_brightness_from_swipe(void) {
         last_debug_print = now;
     }
 #endif
+}
+
+// Update and get swipe animation layers
+// Returns true if animation is active, fills swipe_layers and brightness arrays
+bool get_swipe_animation(uint8_t swipe_layers[5], float swipe_row_brightness[5]) {
+    // Empty
+    for (int i = 0; i < 5; i++) {
+        swipe_layers[i] = 0;
+        swipe_row_brightness[i] = 0.0f;
+    }
+    
+    if (!swipe_anim.active) {
+        return false;
+    }
+    
+    uint32_t now = to_ms_since_boot(get_absolute_time());
+    uint32_t elapsed = now - swipe_anim.last_update;
+    
+    // Update position every ~40ms
+    if (elapsed >= (SWIPE_ANIM_DURATION_MS / SWIPE_ANIM_STEPS)) {
+        swipe_anim.position++;
+        swipe_anim.last_update = now;
+        
+        // End animation when all lines have passed through
+        if (swipe_anim.position > 7) {
+            swipe_anim.active = false;
+            return false;
+        }
+    }
+    
+    // Calculate row positions
+    int8_t row1, row2, row3;
+    if (swipe_anim.direction_up) {
+        row1 = 4 - swipe_anim.position;       // Leading vertical line
+        row2 = 4 - (swipe_anim.position - 1); // Middle layer
+        row3 = 4 - (swipe_anim.position - 2); // Trailing layer
+    } else {
+        row1 = swipe_anim.position;           // Leading horizontal line
+        row2 = swipe_anim.position - 1;       // Middle layer
+        row3 = swipe_anim.position - 2;       // Trailing layer
+    }
+    
+    // Set horizontal lines by setting the same bit in all rows for each column
+    for (int row = 0; row < 5; row++) {
+        if (row1 >= 0 && row1 < 5) {
+            swipe_layers[row] |= (1 << (4 - row1));
+        }
+        if (row2 >= 0 && row2 < 5) {
+            swipe_layers[row] |= (1 << (4 - row2));
+        }
+        if (row3 >= 0 && row3 < 5) {
+            swipe_layers[row] |= (1 << (4 - row3));
+        }
+    }
+    
+    // Set column brightnesses - first row is 80%, then 50%, then 15%
+    if (row1 >= 0 && row1 < 5) {
+        swipe_row_brightness[row1] = 0.80f;
+    }
+    if (row2 >= 0 && row2 < 5) {
+        swipe_row_brightness[row2] = 0.50f;
+    }
+    if (row3 >= 0 && row3 < 5) {
+        swipe_row_brightness[row3] = 0.15f;
+    }
+    
+    return true;
 }
 
 //const char * testString = ;
@@ -300,7 +388,18 @@ int main()
         }
         for(int i = 0; i < 100; i++){
             update_brightness_from_swipe();
-            disp_char(current_char, current_brightness); 
+
+            uint8_t swipe_layers[5];
+            float swipe_row_brightness[5];
+            bool has_swipe = get_swipe_animation(swipe_layers, swipe_row_brightness);
+
+            // Display with or without swipe effect
+            if (has_swipe) {
+                disp_char_with_swipe(current_char, current_brightness, swipe_layers, swipe_row_brightness);
+            } else {
+                disp_char(current_char, current_brightness);
+            }
+            
             //This is janky - ISRs were being weird so we just do 100 display cycles for every button poll
             //which means our polling rate is worst case 100us*25*100 = 250ms.
             //if ISRs still funky maybe throw this on core 1? would be cool and leave core 0 available for user code/polling.
