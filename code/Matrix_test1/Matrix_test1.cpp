@@ -18,7 +18,7 @@
 #define MAX_BRIGHTNESS 0.95f
 #define MIN_BRIGHTNESS 0.05f
 
-#define DEBUG_TEMPERATURE_PRINT 1
+#define DEBUG_TEMPERATURE_PRINT 0
 
 void init_gpio(void){
     gpio_init_mask(MASK_ALL_COLS|MASK_ALL_ROWS);
