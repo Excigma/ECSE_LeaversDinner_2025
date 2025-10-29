@@ -270,6 +270,29 @@ void disp_char(const uint8_t * character, float brightness){
     clear_matrix();
 }
 
+// Display character with swipe effect layers in background
+void disp_char_with_swipe(const uint8_t * character, float brightness, const uint8_t * swipe_layers, const float * swipe_col_brightness){
+    brightness = apply_brightness_scaling(brightness);
+    
+    for(uint8_t row = 0; row < 5; row++){ 
+        for(uint8_t col = 0; col < 5; col++){
+            bool text_pixel = (character[row]>>(4-col))&0x01;
+            bool swipe_pixel = (swipe_layers[row]>>(4-col))&0x01;
+            
+            // Text has priority - render at full brightness
+            if (text_pixel) {
+                render_pixel(row, col, brightness);
+            }
+            // Swipe effect in background - use column brightness for vertical lines
+            else if (swipe_pixel && swipe_col_brightness[col] > 0.0f) {
+                float swipe_bright = apply_brightness_scaling(swipe_col_brightness[col]);
+                render_pixel(row, col, swipe_bright);
+            }
+        }
+    }
+    clear_matrix();
+}
+
 // Display a video frame (25 bytes in row order: [row0][row1][row2][row3][row4])
 void disp_frame(const uint8_t * frame_data, float brightness){
     for(uint8_t row = 0; row < 5; row++){ 
