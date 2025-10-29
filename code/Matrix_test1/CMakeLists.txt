@@ -28,32 +28,32 @@ set(PICO_BOARD pico CACHE STRING "Board type")
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
 
-project(Matrix_test1 C CXX ASM)
+project(ECSE_LD_Invite_2025 C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(Matrix_test1 Matrix_test1.cpp matrix_display.cpp pico_flash.cpp)
+add_executable(ECSE_LD_Invite_2025 main.cpp matrix_display.cpp pico_flash.cpp)
 
-pico_set_program_name(Matrix_test1 "Matrix_test1")
-pico_set_program_version(Matrix_test1 "0.1")
+pico_set_program_name(ECSE_LD_Invite_2025 "ECSE_LD_Invite_2025")
+pico_set_program_version(ECSE_LD_Invite_2025 "1.0")
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(Matrix_test1 0)
-pico_enable_stdio_usb(Matrix_test1 1)
+pico_enable_stdio_uart(ECSE_LD_Invite_2025 0)
+pico_enable_stdio_usb(ECSE_LD_Invite_2025 1)
 
-pico_set_linker_script(Matrix_test1 ${CMAKE_SOURCE_DIR}/memmap_custom.ld)
+pico_set_linker_script(ECSE_LD_Invite_2025 ${CMAKE_SOURCE_DIR}/memmap_custom.ld)
 
 # Add the standard library to the build
-target_link_libraries(Matrix_test1
+target_link_libraries(ECSE_LD_Invite_2025
         pico_stdlib)
 
 # Add the standard include files to the build
-target_include_directories(Matrix_test1 PRIVATE
+target_include_directories(ECSE_LD_Invite_2025 PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
 )
 
-pico_add_extra_outputs(Matrix_test1)
+pico_add_extra_outputs(ECSE_LD_Invite_2025)
 
