@@ -18,7 +18,7 @@
 #define MAX_BRIGHTNESS 0.95f
 #define MIN_BRIGHTNESS 0.05f
 
-#define DEBUG_TEMPERATURE_PRINT 0
+#define DEBUG_PRINT 0
 
 void init_gpio(void){
     gpio_init_mask(MASK_ALL_COLS|MASK_ALL_ROWS);
@@ -188,7 +188,7 @@ void update_brightness_from_swipe(void) {
             break;
     }
 
-#if DEBUG_TEMPERATURE_PRINT
+#if DEBUG_PRINT
     if (now - last_debug_print > 200) {
         printf("ADC: %4d %4d %4d %4d | Base: %4.0f %4.0f %4.0f %4.0f | Touch: %d%d%d%d | Bright: %.1f%%%s\n",
                adc_readings[0], adc_readings[1], adc_readings[2], adc_readings[3],
