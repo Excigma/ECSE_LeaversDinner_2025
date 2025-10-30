@@ -241,7 +241,7 @@ bool get_swipe_animation(uint8_t swipe_layers[5], float swipe_row_brightness[5])
         row3 = swipe_anim.position - 2;       // Trailing layer
     }
     
-    // Set horizontal lines by setting the same bit in all rows for each column
+    // Set horizontal lines by setting the same bit in all rows for each row
     for (int row = 0; row < 5; row++) {
         if (row1 >= 0 && row1 < 5) {
             swipe_layers[row] |= (1 << (4 - row1));
@@ -253,8 +253,8 @@ bool get_swipe_animation(uint8_t swipe_layers[5], float swipe_row_brightness[5])
             swipe_layers[row] |= (1 << (4 - row3));
         }
     }
-    
-    // Set column brightnesses - first row is 80%, then 50%, then 15%
+
+    // Set row brightnesses - first row is 80%, then 50%, then 15%
     if (row1 >= 0 && row1 < 5) {
         swipe_row_brightness[row1] = 0.80f;
     }

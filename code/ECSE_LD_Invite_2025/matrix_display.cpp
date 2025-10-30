@@ -286,7 +286,7 @@ void disp_char_with_swipe(const uint8_t * character, float brightness, const uin
             if (text_pixel) {
                 render_pixel(row, col, brightness);
             }
-            // Swipe effect in background - use column brightness for vertical lines
+            // Swipe effect in background - use row brightness for vertical lines
             else if (swipe_pixel && swipe_col_brightness[col] > 0.0f) {
                 float swipe_bright = apply_brightness_scaling(swipe_col_brightness[col]);
                 render_pixel(row, col, swipe_bright);
