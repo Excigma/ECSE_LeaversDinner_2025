@@ -35,8 +35,6 @@ void init_gpio(void){
     gpio_pull_up(PB2);
     
     adc_init();
-    adc_set_temp_sensor_enabled(true);
-    adc_select_input(4);
 }
 
 uint counter = 0;
