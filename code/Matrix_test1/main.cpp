@@ -2,11 +2,13 @@
 #include "pico/stdlib.h"
 #include <string.h>
 #include "hardware/adc.h"
+#include "pico/multicore.h"
 #include "matrix_display.hpp"
 #include "pindefs.hpp"
 #include "pico_flash.hpp"
 #include "frames.h"
 #include "clw_dbgutils.h"
+#include "music.hpp"
 
 #define STR_BUFFER_LEN 128
 // Number of temperature samples of the "baseline" room temperature to take on startup
@@ -44,7 +46,8 @@ uint counter = 0;
 uint scroll_count = 0;
 const uint8_t * current_char;
 
-float current_brightness = 0.55f;
+// float current_brightness = 0.55f;
+float current_brightness = 1.0f;
 
 // Video playback state
 bool video_mode = false;
@@ -284,11 +287,11 @@ enum disp_mode{
     VIDEO = 2
 };
 
-disp_mode display_mode = USER;
-
+disp_mode display_mode = ECSE;
 
 char userStringBuffer[STR_BUFFER_LEN] = " Use PuTTY to Program (115200b)";
-char presetStringBuffer[STR_BUFFER_LEN] = " BAD APPLE ON 2025 ECSE Part IV LEAVERS' NIGHT INVITE";
+// char presetStringBuffer[STR_BUFFER_LEN] = " BAD APPLE ON 2025 ECSE Part IV LEAVERS' NIGHT INVITE";
+char presetStringBuffer[STR_BUFFER_LEN] = " E";
 char easterEggStr[STR_BUFFER_LEN] = " COMPSYS ON TOP";
 char tempBuffer[STR_BUFFER_LEN] = {0};
 
@@ -316,6 +319,8 @@ void scroll_screen(void){
             video_mode = true;
             video_start_time = to_ms_since_boot(get_absolute_time());
             printf("Video mode activated!\n");
+            // Start Bad Apple music on core 1
+            playSong(0); // SONG_BAD_APPLE
         }
         
         const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
@@ -362,7 +367,11 @@ int main()
     init_gpio();
     read_name_from_flash(userStringBuffer, STR_BUFFER_LEN);
     screen_start();
-    printf("hello, world!");
+    printf("hello, world!\n");
+    
+    // Launch music player on core 1
+    multicore_launch_core1(core1MusicMain);
+    
     add_repeating_timer_ms(-100,scroll_timer_cb,0,&scroll_timer);
     
     while (true) {
@@ -376,6 +385,8 @@ int main()
                 display_mode = VIDEO;
                 video_start_time = to_ms_since_boot(get_absolute_time());
                 printf("Easter egg activated! Playing video...\n");
+                // Start Bad Apple music on core 1
+                playSong(0); // SONG_BAD_APPLE
             }else if((pb1_val == 0)){
                 video_mode = false;
                 display_mode = ECSE;
@@ -386,6 +397,7 @@ int main()
                 add_char_to_scroll(disp_char);
                 scroll_count=5-((disp_char[0]&0xE0)>>5); //3MSB of first col of char = length (0-7)
                 print_info();
+                stopMusic(); // Stop music when switching modes
             }else if(pb2_val == 0){
                 video_mode = false;
                 display_mode = USER;
@@ -395,6 +407,7 @@ int main()
                 add_char_to_scroll_start(disp_char);
                 add_char_to_scroll(disp_char);
                 scroll_count=5-((disp_char[0]&0xE0)>>5); //3MSB of first col of char = length (0-7)
+                stopMusic(); // Stop music when switching modes
             }
             
             //add_char_to_scroll(char_to_matrix(stringBuffer[counter]));
@@ -413,6 +426,7 @@ int main()
             if (video_frame_index >= FRAMES_COUNT) {
                 video_mode = false;
                 video_frame_index = FRAMES_COUNT - 1;
+                stopMusic(); // Stop Bad Apple music
             }
             
             // IDK Campbell had this so I'm just copying it
