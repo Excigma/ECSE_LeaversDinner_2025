@@ -1,2 +1,6 @@
 build
 !.vscode/*
+
+frames
+frames_5x5_gray
+frames_15x15_subpixel
