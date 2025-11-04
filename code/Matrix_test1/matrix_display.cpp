@@ -262,7 +262,7 @@ void disp_char(const uint8_t * character, float brightness){
     
     for(uint8_t row = 0; row < 5; row++){ 
         for(uint8_t col = 0; col < 5; col++){
-            if((character[row]>>(4-col))&0x01){
+            if((character[col]>>row)&0x01){
                 render_pixel(row, col, brightness);
             } 
         }
@@ -276,16 +276,16 @@ void disp_char_with_swipe(const uint8_t * character, float brightness, const uin
     
     for(uint8_t row = 0; row < 5; row++){ 
         for(uint8_t col = 0; col < 5; col++){
-            bool text_pixel = (character[row]>>(4-col))&0x01;
-            bool swipe_pixel = (swipe_layers[row]>>(4-col))&0x01;
+            bool text_pixel = (character[col]>>row)&0x01;
+            bool swipe_pixel = (swipe_layers[col]>>row)&0x01;
             
             // Text has priority - render at full brightness
             if (text_pixel) {
                 render_pixel(row, col, brightness);
             }
-            // Swipe effect in background - use column brightness for vertical lines
-            else if (swipe_pixel && swipe_col_brightness[col] > 0.0f) {
-                float swipe_bright = apply_brightness_scaling(swipe_col_brightness[col]);
+            // Swipe effect in background - use row brightness for rotated lines
+            else if (swipe_pixel && swipe_col_brightness[row] > 0.0f) {
+                float swipe_bright = apply_brightness_scaling(swipe_col_brightness[row]);
                 render_pixel(row, col, swipe_bright);
             }
         }
@@ -297,9 +297,8 @@ void disp_char_with_swipe(const uint8_t * character, float brightness, const uin
 void disp_frame(const uint8_t * frame_data, float brightness){
     for(uint8_t row = 0; row < 5; row++){ 
         for(uint8_t col = 0; col < 5; col++){
-            // index = row * 5 + col
-            // Flip horizontally: use (4 - col) instead of col
-            uint8_t pixel_value = frame_data[row * 5 + (4 - col)];
+            // (4-row) * 5 + col
+            uint8_t pixel_value = frame_data[(4-row) * 5 + col];
             if(pixel_value > 0){
                 // Convert 0-100 to 0.0-1.0, then multiply by set brightness level
                 float pixel_brightness = (pixel_value / 100.0f) * brightness;

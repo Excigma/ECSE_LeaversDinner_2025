@@ -281,14 +281,14 @@ bool get_swipe_animation(uint8_t swipe_layers[5], float swipe_row_brightness[5])
 enum disp_mode{
     USER = 0,
     ECSE = 1,
-    EASTER = 2
+    VIDEO = 2
 };
 
 disp_mode display_mode = USER;
 
 
 char userStringBuffer[STR_BUFFER_LEN] = " Use PuTTY to Program (115200b)";
-char presetStringBuffer[STR_BUFFER_LEN] = " ECSE LEAVERS 2025";
+char presetStringBuffer[STR_BUFFER_LEN] = " BAD APPLE ON 2025 ECSE Part IV LEAVERS' NIGHT INVITE";
 char easterEggStr[STR_BUFFER_LEN] = " COMPSYS ON TOP";
 char tempBuffer[STR_BUFFER_LEN] = {0};
 
@@ -300,11 +300,24 @@ char * strings[] = {
     easterEggStr
 };
 uint8_t tempBufferIdx = 0;
+bool preset_scrolled_once = false;
+
 void scroll_screen(void){
     scroll_chars();
     scroll_count++;
     if(scroll_count==7){
         counter = (counter+1) % strlen(strings[display_mode]);
+        
+        // Check if we've completed one full scroll of the preset string
+        if(display_mode == ECSE && counter == 0 && !preset_scrolled_once) {
+            preset_scrolled_once = true;
+            display_mode = VIDEO;
+            counter = 0;
+            video_mode = true;
+            video_start_time = to_ms_since_boot(get_absolute_time());
+            printf("Video mode activated!\n");
+        }
+        
         const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
         add_char_to_scroll(disp_char);
         scroll_count=5-((disp_char[0]&0xE0)>>5); //3MSB of first col of char = length (0-7)
@@ -360,11 +373,13 @@ int main()
             if((pb1_val==0) &&(pb2_val ==0)){
                 // Easter egg: Play video
                 video_mode = true;
+                display_mode = VIDEO;
                 video_start_time = to_ms_since_boot(get_absolute_time());
                 printf("Easter egg activated! Playing video...\n");
             }else if((pb1_val == 0)){
                 video_mode = false;
                 display_mode = ECSE;
+                preset_scrolled_once = false;
                 counter = 0;
                 const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
                 add_char_to_scroll_start(disp_char);
@@ -374,6 +389,7 @@ int main()
             }else if(pb2_val == 0){
                 video_mode = false;
                 display_mode = USER;
+                preset_scrolled_once = false;
                 counter = 0;
                 const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
                 add_char_to_scroll_start(disp_char);
