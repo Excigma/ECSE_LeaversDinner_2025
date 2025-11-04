@@ -13,8 +13,14 @@
 
 #define CyDelayUs(x) sleep_us(x)
 
+// Video synchronization
+#define VIDEO_FRAMES 6572
+#define VIDEO_FPS 30
+#define VIDEO_DURATION_MS ((VIDEO_FRAMES * 1000) / VIDEO_FPS)  // ~219067 ms
+
 static uint32_t timer_period_ms = 100;
 static uint8_t timer_enable = 0;
+static float music_time_scale = 1.0f;  // Global time scaling factor for sync
 
 // Clock divider compare vals for 100khz freq counter
 uint16_t notes[13][9] = {
@@ -106,7 +112,7 @@ uint8_t badApple[] = {
     MELODY_4, MELODY_5, MELODY_4, MELODY_6, /*goes up one semitone*/0x49, 0x4B,
     MELODY_4A, MELODY_5A, MELODY_4A, MELODY_5A,
     MELODY_4A, MELODY_5A, MELODY_4A, MELODY_6A,
-    LOOP};
+    END_OF_SONG};
 
 uint8_t *noteList;
 
@@ -128,6 +134,46 @@ uint8_t numSongs = sizeof(songList) / sizeof(uint8_t *);
 // prepare note
 static void prepareNote(void);
 
+// Calculate total music duration by simulating playback
+static uint32_t calculateSongDuration(uint8_t *song) {
+    uint32_t total_duration = 0;
+    uint16_t counter = 0;
+    uint32_t current_period = DEFAULT_SPEED;
+    
+    // Simulate the song to calculate total duration
+    while (true) {
+        uint8_t byte = song[counter];
+        
+        if (byte == END_OF_SONG) {
+            break;
+        } else if (byte == LOOP) {
+            // For looping songs, we can't calculate exact duration
+            // Return a flag value
+            return 0xFFFFFFFF;
+        } else if (byte == SPEED) {
+            current_period = song[counter + 1];
+            counter += 2;
+        } else if (byte == SLIDE) {
+            // Slide takes SLIDE_LENGTH periods at reduced speed
+            uint32_t slide_period = current_period / SLIDE_LENGTH;
+            total_duration += slide_period * SLIDE_LENGTH;
+            counter += 3;  // Skip slide command and two note bytes
+        } else {
+            // Regular note - add current period
+            total_duration += current_period;
+            counter++;
+        }
+        
+        // Safety check to prevent infinite loop
+        if (counter > 10000) {
+            printf("ERROR: Song too long or malformed\n");
+            return 0;
+        }
+    }
+    
+    return total_duration;
+}
+
 /**
  * Main Loop for music code.
  * Runs on core 1.
@@ -143,7 +189,9 @@ void core1MusicMain(void)
     while (1) {
         if (timer_enable && musicOn) {
             nextNote(0, NULL);  // Pass 0 instead of NULL for alarm_id_t
-            sleep_ms(timer_period_ms);
+            // Apply time scale to synchronize with video
+            uint32_t scaled_period = (uint32_t)(timer_period_ms * music_time_scale);
+            sleep_ms(scaled_period);
         } else {
             sleep_ms(1); // Small sleep when not playing
         }
@@ -188,6 +236,21 @@ int8_t playSong(int8_t songID) {
     }
     
     printf("Starting song %d - Bad Apple\n", songID);
+    
+    // Calculate song duration and time scale for video sync
+    uint32_t song_duration = calculateSongDuration(songList[songID]);
+    if (song_duration == 0xFFFFFFFF) {
+        printf("WARNING: Looping song detected, using default time scale\n");
+        music_time_scale = 1.0f;
+    } else if (song_duration > 0) {
+        music_time_scale = (float)VIDEO_DURATION_MS / (float)song_duration;
+        printf("Song duration: %lu ms, Video duration: %lu ms, Time scale: %.3f\n", 
+               song_duration, VIDEO_DURATION_MS, music_time_scale);
+    } else {
+        printf("ERROR: Could not calculate song duration\n");
+        music_time_scale = 1.0f;
+    }
+    
     noteCounter = 0;
     noteList = songList[songID];
     timer_period_ms = DEFAULT_SPEED;
