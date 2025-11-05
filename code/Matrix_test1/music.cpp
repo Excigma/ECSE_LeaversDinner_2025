@@ -52,9 +52,12 @@ static uint16_t slideReturnSpeed = 0; // set to a number if in slide
 static uint16_t slide[SLIDE_LENGTH];
 
 // Bad Apple Song Data
-#define BAD_APPLE_SPEED 110
-#define INTRO_1 SPEED, BAD_APPLE_SPEED*2, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, SPEED, BAD_APPLE_SPEED/2, 0x21, 0x0c, 0x21, 0x0c, 0x21, 0x0c, 0x21, 0x0c
-#define INTRO_2 SPEED, BAD_APPLE_SPEED*2, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, SPEED, BAD_APPLE_SPEED, 0x1A, 0x0c, 0x1A, 0x0c
+#define BAD_APPLE_DRUM_SPEED 112
+#define BAD_APPLE_BASS_SPEED 108
+#define BAD_APPLE_MELODY_SPEED 107
+
+#define INTRO_1 SPEED, BAD_APPLE_DRUM_SPEED * 2, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, SPEED, BAD_APPLE_DRUM_SPEED / 2, 0x21, 0x0c, 0x21, 0x0c, 0x21, 0x0c, 0x21, 0x0c
+#define INTRO_2 SPEED, BAD_APPLE_DRUM_SPEED * 2, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, SPEED, BAD_APPLE_DRUM_SPEED, 0x1A, 0x0c, 0x1A, 0x0c
 #define BASS_1 0x13, 0x13, 0x21, 0x23, 0x0c, 0x23, 0x21, 0x23
 #define BASS_2 0x13, 0x13, 0x23, 0x26, 0x28, 0x28, 0x26, 0x28
 #define BASS_3 0x28, 0x28, 0x26, 0x28, 0x26, 0x26, 0x21, 0x23
@@ -69,23 +72,23 @@ static uint16_t slide[SLIDE_LENGTH];
 #define MELODY_4A 0x52, 0x54, 0x4B, 0x49, 0x4B, 0x4B, 0x49, 0x4B, 0x52, 0x54, 0x4B, 0x49, 0x4B, 0x4B
 #define MELODY_5A 0x49, 0x4B, 0x49, 0x47, 0x46, 0x42, 0x44, 0x44, 0x42, 0x44, 0x46, 0x47, 0x49, 0x4B, 0x44, 0x44, 0x49, 0x4B
 #define MELODY_6A 0x54, 0x56, 0x57, 0x56, 0x54, 0x52, 0x4B, 0x4B, 0x49, 0x4B, 0x49, 0x47, 0x46, 0x42, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x0c, 0x0c
+#define PAUSE 0x0c, 0x0c
 
 uint8_t badApple[] = {
     // Drum Beat
-    SPEED, BAD_APPLE_SPEED*2, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, SPEED, BAD_APPLE_SPEED/2, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c,
+    SPEED, BAD_APPLE_DRUM_SPEED * 2, PAUSE, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, SPEED, BAD_APPLE_DRUM_SPEED / 2, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c,
     INTRO_2,
     INTRO_1, INTRO_2,
     INTRO_1, INTRO_2,
-    INTRO_1, SPEED, BAD_APPLE_SPEED*2, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, 0x0c, 0x0c,
+    INTRO_1, SPEED, BAD_APPLE_DRUM_SPEED * 2, 0x1A, 0x0c, 0x1A, 0x0c, 0x1A, 0x0c, 0x0c, 0x0c,
     // Bass Line Enters
-    SPEED, BAD_APPLE_SPEED,
+    SPEED, BAD_APPLE_BASS_SPEED,
     BASS_1, BASS_1, BASS_1, BASS_2,
     BASS_1, BASS_1, BASS_1, BASS_3,
     BASS_1, BASS_1, BASS_1, BASS_2,
-    BASS_1, BASS_1, BASS_1, SPEED, BAD_APPLE_SPEED/2, FALSE_TRIPLET(0x28, 0x26, 0x28), FALSE_TRIPLET(0x26, 0x25, 0x26),
+    BASS_1, BASS_1, BASS_1, SPEED, BAD_APPLE_BASS_SPEED / 2, FALSE_TRIPLET(0x28, 0x26, 0x28), FALSE_TRIPLET(0x26, 0x25, 0x26),
     // Melody Enters
-    SPEED, BAD_APPLE_SPEED*2,
-    MELODY_1, MELODY_2, MELODY_1A, MELODY_3,
+    SPEED, BAD_APPLE_MELODY_SPEED * 2,
     MELODY_1, MELODY_2, MELODY_1A, MELODY_3,
     MELODY_1, MELODY_2, MELODY_1A, MELODY_3A,
     MELODY_4, MELODY_5, MELODY_4, MELODY_5,
@@ -93,20 +96,20 @@ uint8_t badApple[] = {
     MELODY_4, MELODY_5, MELODY_4, MELODY_5,
     MELODY_4, MELODY_5, MELODY_4, MELODY_6, 0x43, 0x0c,
     // Bass line bacc
-    SPEED, BAD_APPLE_SPEED,
+    SPEED, BAD_APPLE_BASS_SPEED,
     BASS_1, BASS_1, BASS_1, BASS_2,
     BASS_1, BASS_1, BASS_1, BASS_3,
     BASS_1, BASS_1, BASS_1, BASS_2,
-    BASS_1, BASS_1, BASS_1, SPEED, BAD_APPLE_SPEED/2, FALSE_TRIPLET(0x28, 0x26, 0x28), FALSE_TRIPLET(0x26, 0x25, 0x26),
+    BASS_1, BASS_1, BASS_1, SPEED, BAD_APPLE_BASS_SPEED / 2, FALSE_TRIPLET(0x28, 0x26, 0x28), FALSE_TRIPLET(0x26, 0x25, 0x26),
     // Melody bacc
-    SPEED, BAD_APPLE_SPEED*2,
+    SPEED, BAD_APPLE_MELODY_SPEED * 2,
     MELODY_1, MELODY_2, MELODY_1A, MELODY_3,
     MELODY_1, MELODY_2, MELODY_1A, MELODY_3A,
     MELODY_4, MELODY_5, MELODY_4, MELODY_5,
-    MELODY_4, MELODY_5, MELODY_4, MELODY_6, /*goes up one semitone*/0x49, 0x4B,
+    MELODY_4, MELODY_5, MELODY_4, MELODY_6, /*goes up one semitone*/ 0x49, 0x4B,
     MELODY_4A, MELODY_5A, MELODY_4A, MELODY_5A,
     MELODY_4A, MELODY_5A, MELODY_4A, MELODY_6A,
-    LOOP};
+    END_OF_SONG};
 
 uint8_t *noteList;
 
@@ -226,7 +229,8 @@ static int64_t nextNote(alarm_id_t id, __unused void *user_data)
         return timer_period_ms * (int64_t)1000;
     
     static uint32_t debug_counter = 0;
-    if (debug_counter++ % 10 == 0) {
+    // if (debug_counter++ % 10 == 0) {
+    if (true) {
         printf("Note %d: counter=%d, period=%dms, note=0x%02x\n", 
                debug_counter, noteCounter, timer_period_ms, noteList[noteCounter]);
     }
