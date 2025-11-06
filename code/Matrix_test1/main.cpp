@@ -37,6 +37,11 @@ void init_gpio(void){
     gpio_pull_up(PB1);
     gpio_pull_up(PB2);
     
+    // Initialize GPIO 11 as output for first row indicator
+    gpio_init(11);
+    gpio_set_dir(11, GPIO_OUT);
+    gpio_put(11, 0);
+    
     adc_init();
     adc_set_temp_sensor_enabled(true);
     adc_select_input(4);

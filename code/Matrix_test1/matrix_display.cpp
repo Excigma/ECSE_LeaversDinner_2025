@@ -248,11 +248,17 @@ static void render_pixel(uint8_t row, uint8_t col, float brightness) {
     
     if (on_time_us > 0) {
         gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, (1<<cols[col])|(MASK_ALL_ROWS &~(1<<rows[row])));
+        // Turn on GPIO 11 when any pixel in the first row is lit
+        if (row != 0) {
+            gpio_put(11, 1);
+        }
         sleep_us(on_time_us);
     }
     
     if (off_time_us > 0) {
         gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, MASK_ALL_ROWS);
+        // Turn off GPIO 11 when pixel is off
+        gpio_put(11, 0);
         sleep_us(off_time_us);
     }
 }
