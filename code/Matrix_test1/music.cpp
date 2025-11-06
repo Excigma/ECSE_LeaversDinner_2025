@@ -52,8 +52,8 @@ static uint16_t slideReturnSpeed = 0; // set to a number if in slide
 static uint16_t slide[SLIDE_LENGTH];
 
 // Bad Apple Song Data
-#define BAD_APPLE_DRUM_SPEED 112
-#define BAD_APPLE_BASS_SPEED 108
+#define BAD_APPLE_DRUM_SPEED 113
+#define BAD_APPLE_BASS_SPEED 109
 #define BAD_APPLE_MELODY_SPEED 108
 #define BAD_APPLE_MELODY_2_SPEED 108
 
