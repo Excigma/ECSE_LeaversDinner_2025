@@ -295,8 +295,8 @@ enum disp_mode{
 disp_mode display_mode = ECSE;
 
 char userStringBuffer[STR_BUFFER_LEN] = " Use PuTTY to Program (115200b)";
-// char presetStringBuffer[STR_BUFFER_LEN] = " BAD APPLE ON 2025 ECSE Part IV LEAVERS' NIGHT INVITE";
-char presetStringBuffer[STR_BUFFER_LEN] = " E";
+char presetStringBuffer[STR_BUFFER_LEN] = " BAD APPLE ON 2025 ECSE Part IV LEAVERS' NIGHT INVITES ";
+// char presetStringBuffer[STR_BUFFER_LEN] = " E";
 char easterEggStr[STR_BUFFER_LEN] = " COMPSYS ON TOP";
 char tempBuffer[STR_BUFFER_LEN] = {0};
 
