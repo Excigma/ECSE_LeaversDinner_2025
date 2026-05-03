@@ -248,17 +248,11 @@ static void render_pixel(uint8_t row, uint8_t col, float brightness) {
     
     if (on_time_us > 0) {
         gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, (1<<cols[col])|(MASK_ALL_ROWS &~(1<<rows[row])));
-        // Turn on GPIO 11 when any pixel in the first row is lit
-        if (row != 0) {
-            gpio_put(11, 1);
-        }
         sleep_us(on_time_us);
     }
     
     if (off_time_us > 0) {
         gpio_put_masked(MASK_ALL_COLS|MASK_ALL_ROWS, MASK_ALL_ROWS);
-        // Turn off GPIO 11 when pixel is off
-        gpio_put(11, 0);
         sleep_us(off_time_us);
     }
 }
@@ -266,9 +260,10 @@ static void render_pixel(uint8_t row, uint8_t col, float brightness) {
 void disp_char(const uint8_t * character, float brightness){
     brightness = apply_brightness_scaling(brightness);
     
+    // Flip 180 degrees: reverse both row and column order
     for(uint8_t row = 0; row < 5; row++){ 
         for(uint8_t col = 0; col < 5; col++){
-            if((character[col]>>row)&0x01){
+            if((character[4-row]>>col)&0x01){
                 render_pixel(row, col, brightness);
             } 
         }
@@ -280,18 +275,19 @@ void disp_char(const uint8_t * character, float brightness){
 void disp_char_with_swipe(const uint8_t * character, float brightness, const uint8_t * swipe_layers, const float * swipe_col_brightness){
     brightness = apply_brightness_scaling(brightness);
     
+    // Flip 180 degrees: reverse both row and column order
     for(uint8_t row = 0; row < 5; row++){ 
         for(uint8_t col = 0; col < 5; col++){
-            bool text_pixel = (character[col]>>row)&0x01;
-            bool swipe_pixel = (swipe_layers[col]>>row)&0x01;
+            bool text_pixel = (character[4-row]>>col)&0x01;
+            bool swipe_pixel = (swipe_layers[4-row]>>col)&0x01;
             
             // Text has priority - render at full brightness
             if (text_pixel) {
                 render_pixel(row, col, brightness);
             }
-            // Swipe effect in background - use row brightness for rotated lines
-            else if (swipe_pixel && swipe_col_brightness[row] > 0.0f) {
-                float swipe_bright = apply_brightness_scaling(swipe_col_brightness[row]);
+            // Swipe effect in background - use column brightness for vertical lines
+            else if (swipe_pixel && swipe_col_brightness[4-col] > 0.0f) {
+                float swipe_bright = apply_brightness_scaling(swipe_col_brightness[4-col]);
                 render_pixel(row, col, swipe_bright);
             }
         }
@@ -301,10 +297,11 @@ void disp_char_with_swipe(const uint8_t * character, float brightness, const uin
 
 // Display a video frame (25 bytes in row order: [row0][row1][row2][row3][row4])
 void disp_frame(const uint8_t * frame_data, float brightness){
+    // Flip 180 degrees: reverse both row and column order
     for(uint8_t row = 0; row < 5; row++){ 
         for(uint8_t col = 0; col < 5; col++){
-            // (4-row) * 5 + col
-            uint8_t pixel_value = frame_data[(4-row) * 5 + col];
+            // Read from flipped position: (4-row) * 5 + (4-col)
+            uint8_t pixel_value = frame_data[(4-row) * 5 + (4-col)];
             if(pixel_value > 0){
                 // Convert 0-100 to 0.0-1.0, then multiply by set brightness level
                 float pixel_brightness = (pixel_value / 100.0f) * brightness;
