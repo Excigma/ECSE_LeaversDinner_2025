@@ -91,7 +91,8 @@ const uint8_t symbols4[][5] = { //ascii 0x7B-0x7E
     {(((0x05)<<5)|0b01000), 0b01000, 0b00100, 0b00010, 0b00100}//~
 };
 const uint8_t icons[][5] = {
-    {(((0x05)<<5)|0b00010), 0b11101, 0b00001, 0b11101, 0b00010} // smiley face
+    {(((0x05)<<5)|0b00010), 0b11101, 0b00001, 0b11101, 0b00010}, // smiley face
+    {(((0x05)<<5)|0b01110), 0b10001, 0b00100, 0b00100, 0b00100}  // graduation cap
 };
 
 
@@ -156,7 +157,7 @@ const uint8_t* char_to_matrix(const char charIn){
         return symbols4[charIn-0x7B];
     }
     if(charIn > 0x7F){
-        return icons[charIn&0x7F];
+        return icons[(charIn&0x7F) % 2];  // Support multiple icons
     }
     return symbols[0];
 }

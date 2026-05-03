@@ -2,13 +2,12 @@
 #include "pico/stdlib.h"
 #include <string.h>
 #include "hardware/adc.h"
-#include "pico/multicore.h"
 #include "matrix_display.hpp"
 #include "pindefs.hpp"
 #include "pico_flash.hpp"
 #include "frames.h"
+#include "graduation_cap.h"
 #include "clw_dbgutils.h"
-#include "music.hpp"
 
 #define STR_BUFFER_LEN 128
 // Number of temperature samples of the "baseline" room temperature to take on startup
@@ -21,7 +20,7 @@
 #define MAX_BRIGHTNESS 0.95f
 #define MIN_BRIGHTNESS 0.05f
 
-#define DEBUG_TEMPERATURE_PRINT 0
+#define DEBUG_TEMPERATURE_PRINT 1
 
 void init_gpio(void){
     gpio_init_mask(MASK_ALL_COLS|MASK_ALL_ROWS);
@@ -37,11 +36,6 @@ void init_gpio(void){
     gpio_pull_up(PB1);
     gpio_pull_up(PB2);
     
-    // Initialize GPIO 11 as output for first row indicator
-    gpio_init(11);
-    gpio_set_dir(11, GPIO_OUT);
-    gpio_put(11, 0);
-    
     adc_init();
     adc_set_temp_sensor_enabled(true);
     adc_select_input(4);
@@ -51,8 +45,7 @@ uint counter = 0;
 uint scroll_count = 0;
 const uint8_t * current_char;
 
-// float current_brightness = 0.55f;
-float current_brightness = 1.0f;
+float current_brightness = 0.55f;
 
 // Video playback state
 bool video_mode = false;
@@ -289,14 +282,15 @@ bool get_swipe_animation(uint8_t swipe_layers[5], float swipe_row_brightness[5])
 enum disp_mode{
     USER = 0,
     ECSE = 1,
-    VIDEO = 2
+    EASTER = 2,
+    GRADUATION = 3
 };
 
-disp_mode display_mode = ECSE;
+disp_mode display_mode = GRADUATION;
+
 
 char userStringBuffer[STR_BUFFER_LEN] = " Use PuTTY to Program (115200b)";
-char presetStringBuffer[STR_BUFFER_LEN] = " BAD APPLE ON 2025 ECSE Part IV LEAVERS' NIGHT INVITES ";
-// char presetStringBuffer[STR_BUFFER_LEN] = " E";
+char presetStringBuffer[STR_BUFFER_LEN] = " BAD APPLE ON ECSE LEAVERS 2025 INVITE";
 char easterEggStr[STR_BUFFER_LEN] = " COMPSYS ON TOP";
 char tempBuffer[STR_BUFFER_LEN] = {0};
 
@@ -319,13 +313,8 @@ void scroll_screen(void){
         // Check if we've completed one full scroll of the preset string
         if(display_mode == ECSE && counter == 0 && !preset_scrolled_once) {
             preset_scrolled_once = true;
-            display_mode = VIDEO;
+            display_mode = EASTER;
             counter = 0;
-            video_mode = true;
-            video_start_time = to_ms_since_boot(get_absolute_time());
-            printf("Video mode activated!\n");
-            // Start Bad Apple music on core 1
-            playSong(0); // SONG_BAD_APPLE
         }
         
         const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
@@ -342,7 +331,7 @@ void screen_start(void){
 
 repeating_timer_t scroll_timer = {0};
 bool scroll_timer_cb(repeating_timer_t * timer){
-    scroll_screen();
+    // scroll_screen();  // Disabled
     return true;
 }
 
@@ -370,14 +359,20 @@ int main()
     tempBufferIdx = 1;
     stdio_init_all();
     init_gpio();
+    
+    // Display graduation cap on startup for 3 seconds (static, no animation)
+    uint32_t startup_end_time = to_ms_since_boot(get_absolute_time()) + 3000;
+    while (to_ms_since_boot(get_absolute_time()) < startup_end_time) {
+        // Display graduation cap statically
+        for (int i = 0; i < 100; i++) {
+            disp_frame(graduation_cap_frame, 0.75f);
+        }
+    }
+    
     read_name_from_flash(userStringBuffer, STR_BUFFER_LEN);
-    screen_start();
-    printf("hello, world!\n");
-    
-    // Launch music player on core 1
-    multicore_launch_core1(core1MusicMain);
-    
-    add_repeating_timer_ms(-100,scroll_timer_cb,0,&scroll_timer);
+    // screen_start();  // Disable auto-scrolling
+    printf("hello, world!");
+    // add_repeating_timer_ms(-100,scroll_timer_cb,0,&scroll_timer);  // Disable auto-scrolling timer
     
     while (true) {
         static bool pb1_last = 1, pb2_last = 1;
@@ -387,11 +382,8 @@ int main()
             if((pb1_val==0) &&(pb2_val ==0)){
                 // Easter egg: Play video
                 video_mode = true;
-                display_mode = VIDEO;
                 video_start_time = to_ms_since_boot(get_absolute_time());
                 printf("Easter egg activated! Playing video...\n");
-                // Start Bad Apple music on core 1
-                playSong(0); // SONG_BAD_APPLE
             }else if((pb1_val == 0)){
                 video_mode = false;
                 display_mode = ECSE;
@@ -402,7 +394,6 @@ int main()
                 add_char_to_scroll(disp_char);
                 scroll_count=5-((disp_char[0]&0xE0)>>5); //3MSB of first col of char = length (0-7)
                 print_info();
-                stopMusic(); // Stop music when switching modes
             }else if(pb2_val == 0){
                 video_mode = false;
                 display_mode = USER;
@@ -412,7 +403,11 @@ int main()
                 add_char_to_scroll_start(disp_char);
                 add_char_to_scroll(disp_char);
                 scroll_count=5-((disp_char[0]&0xE0)>>5); //3MSB of first col of char = length (0-7)
-                stopMusic(); // Stop music when switching modes
+            }else if((pb1_val == 0) && (pb2_val == 1)){
+                // Single button 1 press: show graduation cap
+                video_mode = false;
+                display_mode = GRADUATION;
+                counter = 0;
             }
             
             //add_char_to_scroll(char_to_matrix(stringBuffer[counter]));
@@ -431,13 +426,19 @@ int main()
             if (video_frame_index >= FRAMES_COUNT) {
                 video_mode = false;
                 video_frame_index = FRAMES_COUNT - 1;
-                stopMusic(); // Stop Bad Apple music
             }
             
             // IDK Campbell had this so I'm just copying it
             for(int i = 0; i < 10; i++){
                 update_brightness_from_swipe();
                 disp_frame(frames[video_frame_index], current_brightness);
+            }
+        }
+        // Graduation cap display mode
+        else if (display_mode == GRADUATION) {
+            for(int i = 0; i < 100; i++){
+                update_brightness_from_swipe();
+                disp_frame(graduation_cap_frame, current_brightness);
             }
         }
         // Normal text display mode
