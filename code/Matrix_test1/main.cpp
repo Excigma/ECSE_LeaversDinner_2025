@@ -20,7 +20,7 @@
 #define MAX_BRIGHTNESS 0.95f
 #define MIN_BRIGHTNESS 0.05f
 
-#define DEBUG_TEMPERATURE_PRINT 1
+#define DEBUG_TEMPERATURE_PRINT 0
 
 void init_gpio(void){
     gpio_init_mask(MASK_ALL_COLS|MASK_ALL_ROWS);
@@ -45,7 +45,7 @@ uint counter = 0;
 uint scroll_count = 0;
 const uint8_t * current_char;
 
-float current_brightness = 0.55f;
+float current_brightness = 0.05f;
 
 // Video playback state
 bool video_mode = false;
@@ -56,7 +56,7 @@ uint32_t video_start_time = 0;
 // Swipe detection thresholds
 #define TOUCH_THRESHOLD 10      // How much below baseline counts as a touch
 #define SWIPE_TIMEOUT_MS 300    // Max time for a complete swipe
-#define BRIGHTNESS_STEP 0.1f   // How much to change brightness per swipe
+#define BRIGHTNESS_STEP 0.02f   // How much to change brightness per swipe
 
 // Swipe animation state
 struct SwipeAnimation {
@@ -283,10 +283,19 @@ enum disp_mode{
     USER = 0,
     ECSE = 1,
     EASTER = 2,
-    GRADUATION = 3
+    GRADUATION = 3,
+    LIGHTNING = 4
 };
 
-disp_mode display_mode = GRADUATION;
+const uint8_t lightning_frame[25] = {
+      0,   0, 100,   0,   0,
+      0, 100, 100,   0,   0,
+    100, 100, 100, 100, 100,
+      0,   0, 100, 100,   0,
+      0,   0, 100,   0,   0
+};
+
+disp_mode display_mode = LIGHTNING;
 
 
 char userStringBuffer[STR_BUFFER_LEN] = " Use PuTTY to Program (115200b)";
@@ -331,7 +340,10 @@ void screen_start(void){
 
 repeating_timer_t scroll_timer = {0};
 bool scroll_timer_cb(repeating_timer_t * timer){
-    // scroll_screen();  // Disabled
+    // Only scroll if we are in a text mode
+    if (display_mode == USER || display_mode == ECSE || display_mode == EASTER) {
+        scroll_screen();
+    }
     return true;
 }
 
@@ -360,53 +372,36 @@ int main()
     stdio_init_all();
     init_gpio();
     
-    // Display graduation cap on startup for 3 seconds (static, no animation)
-    uint32_t startup_end_time = to_ms_since_boot(get_absolute_time()) + 3000;
-    while (to_ms_since_boot(get_absolute_time()) < startup_end_time) {
-        // Display graduation cap statically
-        for (int i = 0; i < 100; i++) {
-            disp_frame(graduation_cap_frame, 0.75f);
-        }
-    }
-    
     read_name_from_flash(userStringBuffer, STR_BUFFER_LEN);
-    // screen_start();  // Disable auto-scrolling
+    // We disabled screen_start() from jumping straight to scroll, 
+    // but the timer still needs to be active IF someone pushes both buttons.
     printf("hello, world!");
-    // add_repeating_timer_ms(-100,scroll_timer_cb,0,&scroll_timer);  // Disable auto-scrolling timer
+    add_repeating_timer_ms(-100,scroll_timer_cb,0,&scroll_timer);
     
     while (true) {
         static bool pb1_last = 1, pb2_last = 1;
         bool pb1_val = gpio_get(PB1);
         bool pb2_val = gpio_get(PB2);
         if((pb1_last != pb1_val)||(pb2_last!=pb2_val)){
-            if((pb1_val==0) &&(pb2_val ==0)){
-                // Easter egg: Play video
+            if((pb1_val==0) && (pb2_val ==0)){
+                // Both: Play COMPSYS ON TOP (EASTER)
+                video_mode = false;
+                display_mode = EASTER;
+                preset_scrolled_once = false;
+                counter = 0;
+                const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
+                add_char_to_scroll_start(disp_char);
+                add_char_to_scroll(disp_char);
+                scroll_count=5-((disp_char[0]&0xE0)>>5);
+            }else if((pb1_val == 0) && (pb2_val == 1)){
+                // Button 1: Play Bad Apple
                 video_mode = true;
                 video_start_time = to_ms_since_boot(get_absolute_time());
-                printf("Easter egg activated! Playing video...\n");
-            }else if((pb1_val == 0)){
+                printf("Button 1 -> Bad Apple\n");
+            }else if((pb2_val == 0) && (pb1_val == 1)){
+                // Button 2: Lightning
                 video_mode = false;
-                display_mode = ECSE;
-                preset_scrolled_once = false;
-                counter = 0;
-                const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
-                add_char_to_scroll_start(disp_char);
-                add_char_to_scroll(disp_char);
-                scroll_count=5-((disp_char[0]&0xE0)>>5); //3MSB of first col of char = length (0-7)
-                print_info();
-            }else if(pb2_val == 0){
-                video_mode = false;
-                display_mode = USER;
-                preset_scrolled_once = false;
-                counter = 0;
-                const uint8_t * disp_char = char_to_matrix(strings[display_mode][counter]);
-                add_char_to_scroll_start(disp_char);
-                add_char_to_scroll(disp_char);
-                scroll_count=5-((disp_char[0]&0xE0)>>5); //3MSB of first col of char = length (0-7)
-            }else if((pb1_val == 0) && (pb2_val == 1)){
-                // Single button 1 press: show graduation cap
-                video_mode = false;
-                display_mode = GRADUATION;
+                display_mode = LIGHTNING;
                 counter = 0;
             }
             
@@ -432,6 +427,13 @@ int main()
             for(int i = 0; i < 10; i++){
                 update_brightness_from_swipe();
                 disp_frame(frames[video_frame_index], current_brightness);
+            }
+        }
+        // Lightning display mode
+        else if (display_mode == LIGHTNING) {
+            for(int i = 0; i < 100; i++){
+                update_brightness_from_swipe();
+                disp_frame(lightning_frame, current_brightness);
             }
         }
         // Graduation cap display mode
